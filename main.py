@@ -216,9 +216,25 @@ class TheOptionTrader:
                     print(f"  - {key_path}")
                 print("=" * 40)
             
+            # マージ完了後、optフォルダを削除
+            self._cleanup_opt_folder()
+            
             return merged_config
         else:
             return user_config
+    
+    def _cleanup_opt_folder(self):
+        """
+        optフォルダを削除する（マージ完了後のクリーンアップ）
+        """
+        opt_folder = "opt"
+        
+        try:
+            if os.path.exists(opt_folder):
+                shutil.rmtree(opt_folder)
+                print(f"情報: '{opt_folder}' フォルダを削除しました（設定マージ完了）")
+        except Exception as e:
+            print(f"警告: '{opt_folder}' フォルダの削除に失敗しました: {e}")
     
     def _find_missing_keys(self, default: Dict[str, Any], user: Dict[str, Any], prefix: str = "") -> List[str]:
         """
