@@ -974,6 +974,51 @@ class TheOptionTrader:
             self.driver = None
             print("ブラウザを閉じました。")
     
+    def clear_browser_cache_and_reload(self):
+        """
+        ブラウザのキャッシュをクリアしてページをリロード
+        前回のエントリー本数などのキャッシュを削除する
+        """
+        if not self.driver:
+            print("エラー: ブラウザが起動していません。")
+            return False
+        
+        try:
+            print("  → ブラウザキャッシュをクリア中...")
+            
+            # ローカルストレージとセッションストレージをクリア
+            self.driver.execute_script("window.localStorage.clear();")
+            self.driver.execute_script("window.sessionStorage.clear();")
+            
+            # ページをリロード
+            print("  → ページをリロード中...")
+            self.driver.refresh()
+            
+            # ページの読み込み待機
+            time.sleep(2)
+            
+            print("  → キャッシュクリアとリロードが完了しました")
+            return True
+            
+        except Exception as e:
+            print(f"警告: キャッシュクリア中にエラーが発生しました: {e}")
+            return False
+    
+    def is_purchase_button_available(self):
+        """
+        購入ボタンが利用可能かどうかを確認
+        
+        Returns:
+            bool: 購入ボタンが存在し、クリック可能ならTrue
+        """
+        try:
+            purchase_button_selector = self.config['theoption_settings']['purchase_button_selector']
+            purchase_buttons = self.driver.find_elements(By.CSS_SELECTOR, purchase_button_selector)
+            return len(purchase_buttons) > 0
+        except Exception as e:
+            print(f"警告: 購入ボタンの確認中にエラーが発生しました: {e}")
+            return False
+    
     def execute_trade(self, direction: str, count: int = 1, amount: str = None, trading_time: str = None, retry_seconds: float = None, reset_entry_count: bool = False):
         """
         取引を実行
@@ -1029,6 +1074,13 @@ class TheOptionTrader:
                 print("警告: 購入ボタンのセレクターが設定されていません。")
                 print("config.jsonでpurchase_button_selectorを設定してください。")
                 return False
+            
+            # ワンクリック注文を使用しない場合、購入ボタンが画面上に存在するかチェック
+            if not use_oneclick:
+                if not self.is_purchase_button_available():
+                    print("警告: 購入ボタンが見つかりません。この取引をスキップします。")
+                    print("  → ワンクリック注文が有効になっている可能性があります。")
+                    return False
             
             # 初期のエントリー本数を取得
             if reset_entry_count:
@@ -1253,6 +1305,12 @@ class TheOptionTrader:
             if not purchase_button_selector:
                 print("警告: 購入ボタンのセレクターが設定されていません。")
                 print("config.jsonでpurchase_button_selectorを設定してください。")
+                return False
+            
+            # 購入ボタンが画面上に存在するかチェック
+            if not self.is_purchase_button_available():
+                print("警告: 購入ボタンが見つかりません。この取引をスキップします。")
+                print("  → ワンクリック注文が有効になっている可能性があります。")
                 return False
             
             # 初期のエントリー本数を取得
@@ -1576,6 +1634,10 @@ class TheOptionTrader:
         
         print("\n=== 自動売買開始 ===")
         print(f"スケジュールされた取引数: {len(self.scheduled_trades)}")
+        
+        # 前回のエントリー本数キャッシュをクリアしてリロード
+        print("\n前回のキャッシュをクリアしています...")
+        self.clear_browser_cache_and_reload()
         
         self.is_running = True
         
