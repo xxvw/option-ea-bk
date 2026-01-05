@@ -1075,12 +1075,11 @@ class TheOptionTrader:
                 print("config.jsonでpurchase_button_selectorを設定してください。")
                 return False
             
-            # ワンクリック注文を使用しない場合、購入ボタンが画面上に存在するかチェック
+            # 画面上の購入ボタンの存在を確認し、ワンクリック注文モードを自動判定
             if not use_oneclick:
                 if not self.is_purchase_button_available():
-                    print("警告: 購入ボタンが見つかりません。この取引をスキップします。")
-                    print("  → ワンクリック注文が有効になっている可能性があります。")
-                    return False
+                    print("  → 購入ボタンが見つかりません。ワンクリック注文モードで動作します。")
+                    use_oneclick = True  # 自動的にワンクリック注文モードに切り替え
             
             # 初期のエントリー本数を取得
             if reset_entry_count:
@@ -1131,20 +1130,21 @@ class TheOptionTrader:
                 try:
                     print(f"\n取引実行中 ({i+1}/{count}): {action_name}方向 （残り時間: {remaining_time:.1f}秒）")
                     
-                    # 1. 金額を設定
-                    if not self.set_amount(trade_amount):
-                        print(f"  → 金額設定に失敗しました ({i+1}/{count})")
-                        continue
-                    time.sleep(wait_time * 0.3)
+                    # 1. 金額を設定（2本目以降はスキップ可能な場合はスキップ）
+                    if i == 0 or not use_oneclick:
+                        if not self.set_amount(trade_amount):
+                            print(f"  → 金額設定に失敗しました ({i+1}/{count})")
+                            continue
+                        time.sleep(wait_time * 0.3)
                     
                     # 2. ワンクリック注文の場合
                     if use_oneclick:
-                        # HIGH/LOWボタンをクリックするだけでエントリー（購入ボタンは押さない）
+                        # HIGH/LOWボタンをクリックするだけでエントリー
                         direction_button = WebDriverWait(self.driver, 2).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
                         )
                         direction_button.click()
-                        print(f"  → {action_name}ボタンをクリックしました（ワンクリック注文 - 購入ボタンなし）")
+                        print(f"  → {action_name}ボタンをクリックしました（ワンクリック注文）")
                         time.sleep(wait_time * 0.5)
                     else:
                         # 通常モード
@@ -1306,11 +1306,11 @@ class TheOptionTrader:
                 print("config.jsonでpurchase_button_selectorを設定してください。")
                 return False
             
-            # 購入ボタンが画面上に存在するかチェック
+            # 画面上の購入ボタンの存在を確認し、ワンクリック注文モードを自動判定
+            use_oneclick = False
             if not self.is_purchase_button_available():
-                print("警告: 購入ボタンが見つかりません。この取引をスキップします。")
-                print("  → ワンクリック注文が有効になっている可能性があります。")
-                return False
+                print("  → 購入ボタンが見つかりません。ワンクリック注文モードで動作します。")
+                use_oneclick = True  # 自動的にワンクリック注文モードに切り替え
             
             # 初期のエントリー本数を取得
             initial_entry_count = self.get_entry_count()
@@ -1318,6 +1318,7 @@ class TheOptionTrader:
             
             print(f"取引実行開始: {action_name}方向 x{count}本")
             print(f"  通貨: {trade_currency} (現在表示中の通貨)")
+            print(f"  ワンクリック注文: {'有効（自動検出）' if use_oneclick else '無効'}")
             print(f"  時間: {trade_time}")
             print(f"  金額: {trade_amount}")
             print(f"  リトライ秒数: {trade_retry_seconds}秒")
@@ -1335,80 +1336,93 @@ class TheOptionTrader:
                     # 2. 取引時間選択もスキップ（現在開いている時間をそのまま使用）
                     print(f"  → 取引時間選択をスキップ（現在の時間を使用）")
                     
-                    # 3. 金額を設定
-                    if not self.set_amount(trade_amount):
-                        print(f"  → 金額設定に失敗しました ({i+1}/{count})")
-                        continue
+                    # 3. 金額を設定（ワンクリック注文でない場合、または1本目）
+                    if not use_oneclick or i == 0:
+                        if not self.set_amount(trade_amount):
+                            print(f"  → 金額設定に失敗しました ({i+1}/{count})")
+                            continue
+                        time.sleep(wait_time * 0.3)
                     
-                    # 設定後の待機
-                    time.sleep(wait_time * 0.5)
-                    
-                    # 4. BUY/SELLボタンをクリック（1本目のみ）
-                    if i == 0:
-                        direction_button = WebDriverWait(self.driver, 5).until(
+                    # 4. ワンクリック注文の場合
+                    if use_oneclick:
+                        # HIGH/LOWボタンをクリックするだけでエントリー
+                        direction_button = WebDriverWait(self.driver, 2).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
                         )
                         direction_button.click()
-                        print(f"  → {action_name}ボタンをクリックしました")
-                        
-                        # BUY/SELLボタンクリック後の待機
-                        time.sleep(wait_time)
+                        print(f"  → {action_name}ボタンをクリックしました（ワンクリック注文）")
+                        time.sleep(wait_time * 0.5)
                     else:
-                        print(f"  → {action_name}ボタンのクリックをスキップ（2本目以降）")
+                        # 通常モード
+                        # BUY/SELLボタンをクリック（1本目のみ）
+                        if i == 0:
+                            direction_button = WebDriverWait(self.driver, 5).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
+                            )
+                            direction_button.click()
+                            print(f"  → {action_name}ボタンをクリックしました")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"  → {action_name}ボタンのクリックをスキップ（2本目以降）")
+                        
+                        # 購入ボタンをクリック
+                        purchase_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
+                        )
+                        purchase_button.click()
+                        print(f"  → 購入ボタンをクリックしました")
+                        time.sleep(wait_time)
                     
-                    # 5. 購入ボタンをクリック
-                    purchase_button = WebDriverWait(self.driver, 5).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
-                    )
-                    purchase_button.click()
-                    print(f"  → 購入ボタンをクリックしました")
+                    # 画面反映を待つ
+                    time.sleep(0.5)
                     
-                    # 購入後の待機（画面更新を待つ）
-                    time.sleep(wait_time)
-                    
-                    # 6. エントリー本数を確認
+                    # 5. エントリー本数を確認
                     current_entry_count = self.get_entry_count()
                     expected_count = initial_entry_count + (i + 1)
                     
-                    if current_entry_count < expected_count:
-                        # エントリー本数が不足している場合、リトライ（購入ボタンのみクリック）
-                        print(f"  → エントリー本数が不足しています。リトライします（購入ボタンのみ）...")
-                        retry_start_time = time.time()
-                        retry_check_interval = 0.1
-                        
-                        while time.time() - retry_start_time < trade_retry_seconds:
-                            # 購入ボタンをクリック
-                            try:
-                                purchase_button = WebDriverWait(self.driver, 2).until(
+                    if current_entry_count >= expected_count:
+                        print(f"  → {action_name}取引を実行しました ({i+1}/{count})")
+                        continue
+                    
+                    # エントリー本数が不足している場合、リトライ
+                    print(f"  → エントリー本数が不足しています。リトライします...")
+                    retry_start_time = time.time()
+                    retry_check_interval = 0.1
+                    
+                    while time.time() - retry_start_time < trade_retry_seconds:
+                        # リトライ
+                        try:
+                            if use_oneclick:
+                                direction_button = WebDriverWait(self.driver, 1).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
+                                )
+                                direction_button.click()
+                                print(f"  → リトライ: {action_name}ボタンをクリックしました")
+                            else:
+                                purchase_button = WebDriverWait(self.driver, 1).until(
                                     EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
                                 )
                                 purchase_button.click()
                                 print(f"  → リトライ: 購入ボタンをクリックしました")
-                                time.sleep(wait_time)
-                                # 画面反映を待つため750ms追加待機
-                                time.sleep(0.75)
-                            except TimeoutException:
-                                print(f"  → リトライ: 購入ボタンが見つかりません")
-                            
-                            # エントリー本数を再確認
-                            current_entry_count = self.get_entry_count()
-                            if current_entry_count >= expected_count:
-                                print(f"  → リトライ成功: エントリー本数が目標に達しました ({current_entry_count}本)")
-                                break
-                            
-                            time.sleep(retry_check_interval)
-                        else:
-                            # タイムアウト
-                            final_count = self.get_entry_count()
-                            print(f"  → リトライタイムアウト: エントリー本数={final_count}本 (目標={expected_count}本)")
-                            print(f"  → 追加のエントリーをスキップします")
+                            time.sleep(wait_time * 0.5)
+                        except TimeoutException:
+                            print(f"  → リトライ: ボタンが見つかりません")
+                        
+                        # エントリー本数を再確認
+                        current_entry_count = self.get_entry_count()
+                        if current_entry_count >= expected_count:
+                            print(f"  → リトライ成功: エントリー本数が目標に達しました ({current_entry_count}本)")
                             break
+                        
+                        time.sleep(retry_check_interval)
+                    else:
+                        # タイムアウト
+                        final_count = self.get_entry_count()
+                        print(f"  → リトライタイムアウト: エントリー本数={final_count}本 (目標={expected_count}本)")
+                        print(f"  → 追加のエントリーをスキップします")
+                        break
                     
                     print(f"  → {action_name}取引を実行しました ({i+1}/{count})")
-                    
-                    # 連続取引間の待機
-                    if i < count - 1:
-                        time.sleep(wait_time)
                         
                 except TimeoutException as e:
                     print(f"エラー: ボタンが見つかりません ({i+1}/{count}): {e}")
@@ -1416,16 +1430,22 @@ class TheOptionTrader:
                     current_entry_count = self.get_entry_count()
                     expected_count = initial_entry_count + (i + 1)
                     if current_entry_count < expected_count:
-                        print(f"  → エラー発生後のリトライ: 購入ボタンのみクリックします...")
+                        print(f"  → エラー発生後のリトライ...")
                         retry_start_time = time.time()
                         retry_check_interval = 0.1
                         
                         while time.time() - retry_start_time < trade_retry_seconds:
                             try:
-                                purchase_button = WebDriverWait(self.driver, 2).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
-                                )
-                                purchase_button.click()
+                                if use_oneclick:
+                                    direction_button = WebDriverWait(self.driver, 1).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
+                                    )
+                                    direction_button.click()
+                                else:
+                                    purchase_button = WebDriverWait(self.driver, 2).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
+                                    )
+                                    purchase_button.click()
                                 print(f"  → リトライ: 購入ボタンをクリックしました")
                                 time.sleep(wait_time)
                                 # 画面反映を待つため750ms追加待機
@@ -1448,20 +1468,24 @@ class TheOptionTrader:
                     current_entry_count = self.get_entry_count()
                     expected_count = initial_entry_count + (i + 1)
                     if current_entry_count < expected_count:
-                        print(f"  → エラー発生後のリトライ: 購入ボタンのみクリックします...")
+                        print(f"  → エラー発生後のリトライ...")
                         retry_start_time = time.time()
                         retry_check_interval = 0.1
                         
                         while time.time() - retry_start_time < trade_retry_seconds:
                             try:
-                                purchase_button = WebDriverWait(self.driver, 2).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
-                                )
-                                purchase_button.click()
-                                print(f"  → リトライ: 購入ボタンをクリックしました")
-                                time.sleep(wait_time)
-                                # 画面反映を待つため750ms追加待機
-                                time.sleep(0.75)
+                                if use_oneclick:
+                                    direction_button = WebDriverWait(self.driver, 1).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
+                                    )
+                                    direction_button.click()
+                                else:
+                                    purchase_button = WebDriverWait(self.driver, 2).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, purchase_button_selector))
+                                    )
+                                    purchase_button.click()
+                                print(f"  → リトライ: ボタンをクリックしました")
+                                time.sleep(wait_time * 0.5)
                             except TimeoutException:
                                 pass
                             
