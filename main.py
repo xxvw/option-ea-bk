@@ -1131,21 +1131,20 @@ class TheOptionTrader:
                 try:
                     print(f"\n取引実行中 ({i+1}/{count}): {action_name}方向 （残り時間: {remaining_time:.1f}秒）")
                     
-                    # 1. 金額を設定（2本目以降はスキップ可能な場合はスキップ）
-                    if i == 0 or not use_oneclick:
-                        if not self.set_amount(trade_amount):
-                            print(f"  → 金額設定に失敗しました ({i+1}/{count})")
-                            continue
-                        time.sleep(wait_time * 0.3)
+                    # 1. 金額を設定
+                    if not self.set_amount(trade_amount):
+                        print(f"  → 金額設定に失敗しました ({i+1}/{count})")
+                        continue
+                    time.sleep(wait_time * 0.3)
                     
                     # 2. ワンクリック注文の場合
                     if use_oneclick:
-                        # HIGH/LOWボタンをクリックするだけでエントリー
+                        # HIGH/LOWボタンをクリックするだけでエントリー（購入ボタンは押さない）
                         direction_button = WebDriverWait(self.driver, 2).until(
                             EC.element_to_be_clickable((By.CSS_SELECTOR, direction_button_selector))
                         )
                         direction_button.click()
-                        print(f"  → {action_name}ボタンをクリックしました（ワンクリック注文）")
+                        print(f"  → {action_name}ボタンをクリックしました（ワンクリック注文 - 購入ボタンなし）")
                         time.sleep(wait_time * 0.5)
                     else:
                         # 通常モード
